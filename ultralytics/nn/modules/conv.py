@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import math
+import os
 
 import numpy as np
 import torch
@@ -63,7 +64,10 @@ class Conv(nn.Module):
         """
         super().__init__()
         self.conv = nn.Conv2d(c1, c2, k, s, autopad(k, p, d), groups=g, dilation=d, bias=False)
-        self.bn = nn.BatchNorm2d(c2)
+        if os.environ.get("YOLOSR_NORMALIZATION_FREE", "False") != "True":
+            self.bn = nn.BatchNorm2d(c2)
+        else:
+            self.bn = nn.Identity()
         self.act = self.default_act if act is True else act if isinstance(act, nn.Module) else nn.Identity()
 
     def forward(self, x):
