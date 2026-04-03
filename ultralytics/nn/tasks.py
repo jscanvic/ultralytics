@@ -1635,6 +1635,8 @@ def parse_model(d, ch, verbose=True):
             if "nn." in m
             else getattr(__import__("torchvision").ops, m[16:])
             if "torchvision.ops." in m
+            else getattr(__import__("yolosr").nn, m[7:])
+            if "yolosr." in m
             else globals()[m]
         )  # get module
         for j, a in enumerate(args):
