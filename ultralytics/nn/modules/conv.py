@@ -5,10 +5,13 @@ from __future__ import annotations
 
 import math
 import os
+import copy
 
 import numpy as np
 import torch
 import torch.nn as nn
+
+from shared_config import shared_cfg
 
 __all__ = (
     "CBAM",
@@ -35,6 +38,54 @@ def autopad(k, p=None, d=1):  # kernel, padding, dilation
     if p is None:
         p = k // 2 if isinstance(k, int) else [x // 2 for x in k]  # auto-pad
     return p
+
+class Downsample(nn.Module):
+    def __init__(self, stride: int):
+        super().__init__()
+        self.stride = stride
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x[..., ::self.stride, ::self.stride]
+
+def split_conv2d(conv: nn.Conv2d) -> nn.Module:
+    class SplitConv2d(nn.Sequential):
+        def __init__(self, conv: nn.Conv2d, downsample: nn.Module):
+            super().__init__(
+                conv,
+                downsample
+            )
+
+        def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict,
+                                  missing_keys, unexpected_keys, error_msgs):
+            # The old state dict provides {prefix}weight and {prefix}bias
+            # The new Sequential expects {prefix}1.weight and {prefix}1.bias
+            old_weight_key = prefix + 'weight'
+            old_bias_key = prefix + 'bias'
+
+            new_weight_key = prefix + '0.weight'
+            new_bias_key = prefix + '0.bias'
+
+            # Safely migrate the keys if they exist in the incoming state_dict
+            if old_weight_key in state_dict:
+                state_dict[new_weight_key] = state_dict.pop(old_weight_key)
+            if old_bias_key in state_dict:
+                state_dict[new_bias_key] = state_dict.pop(old_bias_key)
+
+            # Proceed with standard loading
+            super()._load_from_state_dict(state_dict, prefix, local_metadata, strict,
+                                          missing_keys, unexpected_keys, error_msgs)
+
+    stride = conv.stride
+    # 1. Clone the original convolutional layer
+    conv = copy.deepcopy(conv)
+    # 2. Set the stride of the convolution to (1, 1)
+    conv.stride = (1, 1)
+    # 3. Create a separate downsampling operation
+    assert len(stride) == 2 and stride[0] == stride[1], "Only supports equal stride in both dimensions"
+    stride = stride[0]
+    downsample = Downsample(stride=stride) if stride > 1 else None
+    return SplitConv2d(conv, downsample) if downsample is not None else conv
+
 
 
 class Conv(nn.Module):
@@ -63,7 +114,12 @@ class Conv(nn.Module):
             act (bool | nn.Module): Activation function.
         """
         super().__init__()
-        self.conv = nn.Conv2d(c1, c2, k, s, autopad(k, p, d), groups=g, dilation=d, bias=False)
+        unstrided = shared_cfg.get("UNSTRIDED_CONV", False)
+        conv = nn.Conv2d(c1, c2, k, s, autopad(k, p, d), groups=g, dilation=d, bias=False)
+        if not unstrided:
+            self.conv = conv
+        else:
+            self.conv = split_conv2d(conv)
         if os.environ.get("YOLOSR_NORMALIZATION_FREE", "False") != "True":
             self.bn = nn.BatchNorm2d(c2)
         else:
