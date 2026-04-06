@@ -23,6 +23,7 @@ Commands:
 
 from ultralytics.utils import LOGGER, RUNS_DIR, SETTINGS, TESTS_RUNNING, colorstr
 
+
 try:
     import os
 
@@ -38,6 +39,8 @@ try:
 except (ImportError, AssertionError):
     mlflow = None
 
+
+delegated = os.environ.get("ULTRALYTICS_DELEGATE_MLFLOW", "False").lower() == "true"
 
 def sanitize_dict(x: dict) -> dict:
     """Sanitize dictionary keys by removing parentheses and converting values to floats."""
@@ -62,22 +65,32 @@ def on_pretrain_routine_end(trainer):
     """
     global mlflow
 
-    uri = os.environ.get("MLFLOW_TRACKING_URI") or str(RUNS_DIR / "mlflow")
-    LOGGER.debug(f"{PREFIX} tracking uri: {uri}")
-    mlflow.set_tracking_uri(uri)
+    # Delegated MLflow is setup externally by the user outside ultralytics
+    if not delegated:
+        LOGGER.info("MLflow is not delegated, setting up MLflow logging for this run")
+        uri = os.environ.get("MLFLOW_TRACKING_URI") or str(RUNS_DIR / "mlflow")
+        LOGGER.debug(f"{PREFIX} tracking uri: {uri}")
+        mlflow.set_tracking_uri(uri)
 
-    # Set experiment and run names
-    experiment_name = os.environ.get("MLFLOW_EXPERIMENT_NAME") or trainer.args.project or "/Shared/Ultralytics"
-    run_name = os.environ.get("MLFLOW_RUN") or trainer.args.name
-    mlflow.set_experiment(experiment_name)
+        # Set experiment and run names
+        experiment_name = os.environ.get("MLFLOW_EXPERIMENT_NAME") or trainer.args.project or "/Shared/Ultralytics"
+        run_name = os.environ.get("MLFLOW_RUN") or trainer.args.name
+        mlflow.set_experiment(experiment_name)
 
-    mlflow.autolog()
+        mlflow.autolog()
+        try:
+            active_run = mlflow.active_run() or mlflow.start_run(run_name=run_name)
+            LOGGER.info(f"{PREFIX}logging run_id({active_run.info.run_id}) to {uri}")
+            if Path(uri).is_dir():
+                LOGGER.info(f"{PREFIX}view at http://127.0.0.1:5000 with 'mlflow server --backend-store-uri {uri}'")
+            LOGGER.info(f"{PREFIX}disable with 'yolo settings mlflow=False'")
+        except Exception as e:
+            LOGGER.warning(f"{PREFIX}Failed to initialize: {e}")
+            LOGGER.warning(f"{PREFIX}Not tracking this run")
+    else:
+        LOGGER.info("MLflow is delegated, skipping MLflow setup inside ultralytics")
+
     try:
-        active_run = mlflow.active_run() or mlflow.start_run(run_name=run_name)
-        LOGGER.info(f"{PREFIX}logging run_id({active_run.info.run_id}) to {uri}")
-        if Path(uri).is_dir():
-            LOGGER.info(f"{PREFIX}view at http://127.0.0.1:5000 with 'mlflow server --backend-store-uri {uri}'")
-        LOGGER.info(f"{PREFIX}disable with 'yolo settings mlflow=False'")
         mlflow.log_params(dict(trainer.args))
     except Exception as e:
         LOGGER.warning(f"{PREFIX}Failed to initialize: {e}")
