@@ -120,6 +120,9 @@ def on_train_end(trainer):
     if not mlflow:
         return
     mlflow.log_artifact(str(trainer.best.parent))  # log save_dir/weights directory with best.pt and last.pt
+    # Also log the paths to the best and last model
+    mlflow.log_param("best_model_path", str(trainer.best))  # log the best model path as a parameter
+    mlflow.log_param("last_model_path", str(trainer.last))  # log the last model path as a parameter
     for f in trainer.save_dir.glob("*"):  # log all other files in save_dir
         if f.suffix in {".png", ".jpg", ".csv", ".pt", ".yaml"}:
             mlflow.log_artifact(str(f))
