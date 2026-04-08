@@ -1566,8 +1566,11 @@ def parse_model(d, ch, verbose=True):
             LOGGER.warning(f"no model scale passed. Assuming scale='{scale}'.")
         depth, width, max_channels = scales[scale]
 
+    import yolosr.nn
     if act:
-        Conv.default_act = eval(act)  # redefine default activation, i.e. Conv.default_act = torch.nn.SiLU()
+        act_fn = eval(act)
+        Conv.default_act = act_fn  # redefine default activation, i.e. Conv.default_act = torch.nn.SiLU()
+        yolosr.nn.Conv.default_act = act_fn  # Also apply it to yolosr.Conv
         if verbose:
             LOGGER.info(f"{colorstr('activation:')} {act}")  # print
 
@@ -1575,7 +1578,6 @@ def parse_model(d, ch, verbose=True):
         LOGGER.info(f"\n{'':>3}{'from':>20}{'n':>3}{'params':>10}  {'module':<45}{'arguments':<30}")
     ch = [ch]
     layers, save, c2 = [], [], ch[-1]  # layers, savelist, ch out
-    import yolosr.nn
     base_modules = frozenset(
         {
             Classify,
