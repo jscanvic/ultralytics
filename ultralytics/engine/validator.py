@@ -215,9 +215,20 @@ class BaseValidator:
             with dt[0]:
                 batch = self.preprocess(batch)
 
-            # Inference
             with dt[1]:
-                preds = model(batch["img"], augment=augment)
+                # Adversarial attack
+                if hasattr(self, "attack"):
+                    attack_result = self.attack(model, batch["img"], batch["cls"], batch["bboxes"], augment)
+                    batch = {
+                        **batch,
+                        "img": attack_result["altered_img"],
+                        "cls": attack_result["altered_cls"],
+                        "bboxes": attack_result["altered_bboxes"],
+                    }
+                    preds = attack_result["altered_preds"]
+                else:
+                    # Inference
+                    preds = model(batch["img"], augment=augment)
 
             # Loss
             with dt[2]:
