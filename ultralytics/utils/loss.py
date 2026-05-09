@@ -357,7 +357,13 @@ class v8DetectionLoss:
             stride=self.stride.tolist(),
             topk2=tal_topk2,
         )
-        self.bbox_loss = BboxLoss(m.reg_max).to(device)
+        import os
+        kind = os.environ.get("YOLOSR_BBOX_LOSS", "")
+        if not kind:
+            self.bbox_loss = BboxLoss(m.reg_max).to(device)
+        else:
+            import yolosr.utils.loss as yolosr_loss
+            self.bbox_loss = yolosr_loss.BboxLoss(m.reg_max, kind=kind).to(device)
         self.proj = torch.arange(m.reg_max, dtype=torch.float, device=device)
 
     def preprocess(self, targets: torch.Tensor, batch_size: int, scale_tensor: torch.Tensor) -> torch.Tensor:
