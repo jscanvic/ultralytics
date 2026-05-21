@@ -871,6 +871,7 @@ class BaseTrainer:
                     "freeze",
                     "val",
                     "plots",
+                    "lr_scheduler",
                 ):  # allow arg updates to reduce memory or update device on resume
                     if k in overrides:
                         setattr(self.args, k, overrides[k])
