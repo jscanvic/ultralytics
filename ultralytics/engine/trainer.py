@@ -873,6 +873,7 @@ class BaseTrainer:
                     "plots",
                     "lr_scheduler",
                     "epochs",
+                    "mosaic",
                 ):  # allow arg updates to reduce memory or update device on resume
                     if k in overrides:
                         setattr(self.args, k, overrides[k])
