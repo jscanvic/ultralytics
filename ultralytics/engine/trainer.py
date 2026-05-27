@@ -249,10 +249,17 @@ class BaseTrainer:
             self.lf = lambda x: 1.0
             self.scheduler = None
             return
+
         if self.args.cos_lr:
             self.lf = one_cycle(1, self.args.lrf, self.epochs)  # cosine 1->hyp['lrf']
         else:
-            self.lf = lambda x: max(1 - x / self.epochs, 0) * (1.0 - self.args.lrf) + self.args.lrf  # linear
+            vanishing = False  # whether it goes to zero or remains at lrf
+            if not vanishing:
+                self.lf = lambda x: max(1 - x / self.epochs, 0) * (1.0 - self.args.lrf) + self.args.lrf  # linear
+            else:
+                slope = None  # e.g. - (1 - lrf) / epochs
+                assert slope is not None, "The slope is left unspecified."
+                self.lf = lambda x: max(slope * x + 1, 0)  # linear
         self.scheduler = optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=self.lf)
 
     def _setup_ddp(self):
