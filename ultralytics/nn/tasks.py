@@ -249,7 +249,7 @@ class BaseModel(torch.nn.Module):
                 if isinstance(m, RepVGGDW):
                     m.fuse()
                     m.forward = m.forward_fuse
-                if isinstance(m, (Detect, yolosr.nn.Detect,)) and getattr(m, "end2end", False):
+                if isinstance(m, (Detect, yolosr.nn.DetectAF, yolosr.nn.DetectCentroid)) and getattr(m, "end2end", False):
                     m.fuse()  # remove one2many head
             self.info(verbose=verbose)
 
@@ -290,7 +290,7 @@ class BaseModel(torch.nn.Module):
         m = self.model[-1]  # Detect()
         import yolosr.nn
         if isinstance(
-            m, (Detect, yolosr.nn.Detect,)
+            m, (Detect, yolosr.nn.DetectAF, yolosr.nn.DetectCentroid)
         ):  # includes all Detect subclasses like Segment, Pose, OBB, WorldDetect, YOLOEDetect, YOLOESegment
             m.stride = fn(m.stride)
             m.anchors = fn(m.anchors)
@@ -399,7 +399,7 @@ class DetectionModel(BaseModel):
         # Build strides
         m = self.model[-1]  # Detect()
         import yolosr.nn
-        if isinstance(m, (Detect, yolosr.nn.Detect,)):  # includes all Detect subclasses like Segment, Pose, OBB, YOLOEDetect, YOLOESegment
+        if isinstance(m, (Detect, yolosr.nn.DetectAF, yolosr.nn.DetectCentroid)):  # includes all Detect subclasses like Segment, Pose, OBB, YOLOEDetect, YOLOESegment
             s = 256  # 2x min stride
             m.inplace = self.inplace
 
@@ -1696,7 +1696,8 @@ def parse_model(d, ch, verbose=True):
         elif m in frozenset(
             {
                 Detect,
-                yolosr.nn.Detect,
+                yolosr.nn.DetectAF,
+                yolosr.nn.DetectCentroid,
                 WorldDetect,
                 YOLOEDetect,
                 Segment,
@@ -1712,7 +1713,7 @@ def parse_model(d, ch, verbose=True):
             args.extend([reg_max, end2end, [ch[x] for x in f]])
             if m is Segment or m is YOLOESegment or m is Segment26 or m is YOLOESegment26:
                 args[2] = make_divisible(min(args[2], max_channels) * width, 8)
-            if m in {Detect, yolosr.nn.Detect, YOLOEDetect, Segment, Segment26, YOLOESegment, YOLOESegment26, Pose, Pose26, OBB, OBB26}:
+            if m in {Detect, yolosr.nn.DetectAF, yolosr.nn.DetectCentroid, YOLOEDetect, Segment, Segment26, YOLOESegment, YOLOESegment26, Pose, Pose26, OBB, OBB26}:
                 m.legacy = legacy
         elif m is v10Detect:
             args.append([ch[x] for x in f])
