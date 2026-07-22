@@ -55,7 +55,6 @@ from ultralytics.utils.torch_utils import (
     autocast,
     convert_optimizer_state_dict_to_fp16,
     init_seeds,
-    one_cycle,
     select_device,
     strip_optimizer,
     torch_distributed_zero_first,
@@ -250,17 +249,15 @@ class BaseTrainer:
             self.scheduler = None
             return
 
-        if self.args.cos_lr:
-            self.lf = one_cycle(1, self.args.lrf, self.epochs)  # cosine 1->hyp['lrf']
-        else:
-            vanishing = False  # whether it goes to zero or remains at lrf
-            if not vanishing:
-                self.lf = lambda x: max(1 - x / self.epochs, 0) * (1.0 - self.args.lrf) + self.args.lrf  # linear
-            else:
-                slope = None  # e.g. - (1 - lrf) / epochs
-                assert slope is not None, "The slope is left unspecified."
-                self.lf = lambda x: max(slope * x + 1, 0)  # linear
-        self.scheduler = optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=self.lf)
+        from yolosr.scheduling import build_scheduler
+
+        self.scheduler, self.lf = build_scheduler(
+            self.optimizer,
+            kind=self.args.lr_scheduler_kind,
+            cos_lr=self.args.cos_lr,
+            lrf=self.args.lrf,
+            epochs=self.epochs,
+        )
 
     def _setup_ddp(self):
         """Initialize and set the DistributedDataParallel parameters for training."""
@@ -879,6 +876,7 @@ class BaseTrainer:
                     "val",
                     "plots",
                     "lr_scheduler",
+                    "lr_scheduler_kind",
                     "epochs",
                     "mosaic",
                 ):  # allow arg updates to reduce memory or update device on resume
